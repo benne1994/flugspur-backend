@@ -17,6 +17,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(cors());
+app.use('/uploads', express.static(uploadFolder));
 app.use(express.static(uploadFolder));
 
 app.get('/list', (req, res) => {
