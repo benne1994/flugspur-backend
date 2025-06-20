@@ -1,96 +1,120 @@
-<!DOCTYPE html><html lang="de">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Skifahrkarte 3D</title>
-  <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
-  <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-  <style>
-    html, body, #cesiumContainer {
-      width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
-    }
-    #toolbar {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1;
-      background: rgba(255, 255, 255, 0.8);
-      padding: 10px;
-      border-radius: 8px;
-    }
-  </style>
+<!DOCTYPE html><html lang="de"><head>  <meta charset="utf-8">
+  <title>Flugspur App mit Höhen-Offset</title>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const supabase = window.supabase.createClient(
+    'https://jmtajdfehlvyzrtfnszs.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptdGFqZGZlaGx2eXpydGZuc3pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2Mzc1NzAsImV4cCI6MjA2MjIxMzU3MH0.GjQ7A9NwIineYRtrpUmy01i1hwRukkwQEcBKuVqlOEI'
+  );
+</script>
+
+<style>
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    font-family: var(--font);
+    background: var(--bg-color);
+    overflow: hidden;
+  }
+
+  #cesiumContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .cesium-button {
+    width: 8vw;
+    height: 8vw;
+    margin-bottom: 12px;
+  }
+
+  .cesium-viewer-toolbar {
+    top: 2vw !important;
+    right: 2vw !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+
+
+</style>
+
 </head>
+
 <body>
   <div id="cesiumContainer"></div>
-  <div id="toolbar">
-    <button onclick="toggleSkiLayer()">Skipisten ein/aus</button>
-  </div>  <script>
-    const viewer = new Cesium.Viewer("cesiumContainer", {
-      terrainProvider: Cesium.createWorldTerrain(),
-      timeline: false,
-      animation: false,
-      baseLayerPicker: true
-    });
 
-    // Standort anzeigen
-    navigator.geolocation.getCurrentPosition(position => {
-      const coords = position.coords;
-      const pos = Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude);
-      viewer.entities.add({
-        position: pos,
-        point: { pixelSize: 10, color: Cesium.Color.ORANGE },
-        label: { text: "Dein Standort", font: '14px sans-serif', pixelOffset: new Cesium.Cartesian2(0, -20) }
-      });
-      viewer.camera.flyTo({ destination: pos, duration: 2 });
-    });
 
-    // Skipisten-Layer (OpenSnowMap)
-    let skiLayer;
-    function toggleSkiLayer() {
-      if (skiLayer) {
-        viewer.imageryLayers.remove(skiLayer);
-        skiLayer = null;
-      } else {
-        skiLayer = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
-          url: 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png',
-          credit: 'OpenSnowMap',
-          maximumLevel: 17
-        }));
-      }
-    }
+</body>
 
-    // Optional: eigene Skipisten-GeoJSON laden
-    async function loadSkiPistes() {
-      const response = await fetch("https://raw.githubusercontent.com/benne1994/flugspur-backend/main/skipisten.geojson");
-      if (!response.ok) {
-        console.error("Fehler beim Laden der Skipisten");
-        return;
-      }
 
-      const geojson = await response.json();
+<script>
+Cesium.Ion.defaultAccessToken  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZTI3MDRmMy1mYjg5LTRjNmYtYjBmZC1kZDQxN2NlNzVkZDEiLCJpZCI6Mjk3NzA1LCJpYXQiOjE3NDU5MzE5MTh9.svRycz7t606srY9WbWiWUaLB2hJpycWmo835Dy-VWtw';
 
-      const dataSource = await Cesium.GeoJsonDataSource.load(geojson, {
-        clampToGround: true
-      });
+let startAltitude = null;
+const altitudeOffset = 50;
+const viewer = new Cesium.Viewer('cesiumContainer', {
+  sceneMode: Cesium.SceneMode.SCENE3D,
+  animation: false,
+  timeline: false,
+  baseLayerPicker: true,
+  fullscreenButton: false,
+  homeButton: false,
+  sceneModePicker: false,
+  geocoder: false,
+  navigationHelpButton: false,
+  infoBox: false,
+  selectionIndicator: false,
+  terrain: Cesium.Terrain.fromWorldTerrain()
+    
+});
 
-      dataSource.entities.values.forEach(entity => {
-        const difficulty = entity.properties?.difficulty?.getValue();
-        let color = Cesium.Color.GRAY;
+// Skipistenlayer von OpenSnowMap einfügen
+viewer.imageryLayers.addImageryProvider(
+  new Cesium.UrlTemplateImageryProvider({
+    url: 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png',
+    credit: '© OpenSnowMap',
+    maximumLevel: 17
+  })
+);
 
-        if (difficulty === "easy") color = Cesium.Color.BLUE;
-        else if (difficulty === "intermediate") color = Cesium.Color.RED;
-        else if (difficulty === "expert") color = Cesium.Color.BLACK;
+navigator.geolocation.getCurrentPosition(pos => {
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  const alt = (pos.coords.altitude || 0) + 1000;
 
-        if (entity.polyline) {
-          entity.polyline.material = color;
-          entity.polyline.width = 3;
-        }
-      });
+  const destination = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+  viewer.camera.flyTo({
+    destination: destination,
+    duration: 8
+  });
+}, err => {
+  console.warn("GPS nicht verfügbar:", err);
+});
 
-      viewer.dataSources.add(dataSource);
-    }
 
-    // Direkt laden
-    loadSkiPistes();
-  </script></body>
-</html>
+
+
+
+
+
+
+  
+
+
+
+
+
+
+</script></body></html>
