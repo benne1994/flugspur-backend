@@ -34,7 +34,7 @@
   let gpsMarker = null;
 
   map.on('load', () => {
-    // Gelände aktivieren
+    // --- Gelände aktivieren ---
     map.addSource('terrain', {
       type: 'raster-dem',
       tiles: [`https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${maptilerApiKey}`],
@@ -43,7 +43,7 @@
     });
     map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
 
-    // Skipistenlayer einfügen
+    // --- Skipistenlayer einfügen ---
     map.addSource('pisten', {
       type: 'raster',
       tiles: ['https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png'],
@@ -59,7 +59,7 @@
       maxzoom: 17
     });
 
-    // GPS-Standort regelmäßig aktualisieren
+    // --- NUR GPS ---
     function updateGPS() {
       navigator.geolocation.getCurrentPosition(pos => {
         const lon = pos.coords.longitude;
@@ -78,9 +78,9 @@
     }
 
     updateGPS();
-    setInterval(updateGPS, 5000); // alle 5 Sekunden
+    setInterval(updateGPS, 5000);
 
-    // Three.js Szene vorbereiten
+    // --- Three.js Szene vorbereiten ---
     scene = new THREE.Scene();
     camera = new THREE.Camera();
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -121,6 +121,7 @@
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, material);
     lineGroup.add(line);
+
     lineGroup.scale.set(500, 500, 500);
 
     const threeLayer = {
