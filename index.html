@@ -1,121 +1,142 @@
-<!DOCTYPE html><html lang="de"><head>  <meta charset="utf-8">
-  <title>Flugspur App mit Höhen-Offset</title>
-  <link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
-  <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>3D Hybridkarte mit Gelände, GPS und Skipisten</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
+  <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/three@0.150.0/build/three.min.js"></script>
+</head>
+<body>
+
+<div id="map"></div>
+
 <script>
-  const supabase = window.supabase.createClient(
-    'https://jmtajdfehlvyzrtfnszs.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptdGFqZGZlaGx2eXpydGZuc3pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2Mzc1NzAsImV4cCI6MjA2MjIxMzU3MH0.GjQ7A9NwIineYRtrpUmy01i1hwRukkwQEcBKuVqlOEI'
-  );
+  const maptilerApiKey = 'r9nsDaWjLXRLFpq2ZVcC';
+
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: `https://api.maptiler.com/maps/hybrid/style.json?key=${maptilerApiKey}`,
+    center: [10.25, 50.125],
+    zoom: 11,
+    pitch: 60,
+    bearing: 0,
+    maxPitch: 85,
+    antialias: true
+  });
+
+  let scene, camera, renderer, lineGroup;
+
+  map.on('load', () => {
+    // --- Gelände aktivieren ---
+    map.addSource('terrain', {
+      type: 'raster-dem',
+      tiles: [`https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${maptilerApiKey}`],
+      tileSize: 512,
+      maxzoom: 15
+    });
+    map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+
+    // --- Skipistenlayer einfügen ---
+    map.addSource('pisten', {
+      type: 'raster',
+      tiles: ['https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenSnowMap'
+    });
+
+    map.addLayer({
+      id: 'pisten-layer',
+      type: 'raster',
+      source: 'pisten',
+      minzoom: 0,
+      maxzoom: 17
+    });
+
+    // --- Standort anzeigen ---
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lon = pos.coords.longitude;
+      const lat = pos.coords.latitude;
+
+      new maplibregl.Marker({ color: "#007aff" })
+        .setLngLat([lon, lat])
+        .addTo(map);
+
+      map.flyTo({ center: [lon, lat], zoom: 15 });
+    }, err => {
+      console.warn("Standort nicht verfügbar:", err);
+    });
+
+    // --- Three.js Szene vorbereiten ---
+    scene = new THREE.Scene();
+    camera = new THREE.Camera();
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.autoClear = false;
+
+    lineGroup = new THREE.Group();
+    scene.add(lineGroup);
+
+    const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+    const points = [];
+
+    const centerLon = 10.25;
+    const centerLat = 50.125;
+    const R = 6371000;
+
+    function lonLatAltToVector3(lon, lat, alt) {
+      const dLon = (lon - centerLon) * (Math.PI / 180);
+      const dLat = (lat - centerLat) * (Math.PI / 180);
+      const x = R * dLon * Math.cos(centerLat * Math.PI / 180);
+      const y = R * dLat;
+      const z = alt;
+      return new THREE.Vector3(x, z, -y);
+    }
+
+    const flightPath = [
+      { lon: 10.0, lat: 50.0, alt: 0 },
+      { lon: 10.1, lat: 50.05, alt: 500 },
+      { lon: 10.2, lat: 50.1, alt: 800 },
+      { lon: 10.3, lat: 50.15, alt: 600 },
+      { lon: 10.4, lat: 50.2, alt: 300 },
+      { lon: 10.5, lat: 50.25, alt: 0 }
+    ];
+
+    flightPath.forEach(p => {
+      points.push(lonLatAltToVector3(p.lon, p.lat, p.alt));
+    });
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    lineGroup.add(line);
+
+    lineGroup.scale.set(500, 500, 500);
+
+    const threeLayer = {
+      id: 'threejs-layer',
+      type: 'custom',
+      renderingMode: '3d',
+      onAdd: function (map, gl) {
+        renderer.setSize(map.getCanvas().width, map.getCanvas().height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer = renderer;
+      },
+      render: function (gl, matrix) {
+        const m = new THREE.Matrix4().fromArray(matrix);
+        camera.projectionMatrix = m;
+        renderer.resetState();
+        renderer.render(scene, camera);
+        map.triggerRepaint();
+      }
+    };
+
+    map.addLayer(threeLayer);
+  });
 </script>
 
-<style>
-    
-
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    font-family: var(--font);
-    background: var(--bg-color);
-    overflow: hidden;
-  }
-
-  #cesiumContainer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .cesium-button {
-    width: 8vw;
-    height: 8vw;
-    margin-bottom: 12px;
-  }
-
-  .cesium-viewer-toolbar {
-    top: 2vw !important;
-    right: 2vw !important;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-
-
-</style>
-
-</head>
-
-<body>
-  <div id="cesiumContainer"></div>
-
-
 </body>
-
-
-<script>
-Cesium.Ion.defaultAccessToken  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZTI3MDRmMy1mYjg5LTRjNmYtYjBmZC1kZDQxN2NlNzVkZDEiLCJpZCI6Mjk3NzA1LCJpYXQiOjE3NDU5MzE5MTh9.svRycz7t606srY9WbWiWUaLB2hJpycWmo835Dy-VWtw';
-
-let startAltitude = null;
-const altitudeOffset = 50;
-const viewer = new Cesium.Viewer('cesiumContainer', {
-  sceneMode: Cesium.SceneMode.SCENE3D,
-  animation: false,
-  timeline: false,
-  baseLayerPicker: true,
-  fullscreenButton: false,
-  homeButton: false,
-  sceneModePicker: true,
-  geocoder: true,
-  navigationHelpButton: true,
-  infoBox: false,
-  selectionIndicator: false,
-  terrain: Cesium.Terrain.fromWorldTerrain()
-    
-});
-
-// Skipistenlayer von OpenSnowMap einfügen
-viewer.imageryLayers.addImageryProvider(
-  new Cesium.UrlTemplateImageryProvider({
-    url: 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png',
-    credit: '© OpenSnowMap',
-    maximumLevel: 17
-  })
-);
-
-navigator.geolocation.getCurrentPosition(pos => {
-  const lat = pos.coords.latitude;
-  const lon = pos.coords.longitude;
-  const alt = (pos.coords.altitude || 0) + 1000;
-
-  const destination = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
-  viewer.camera.flyTo({
-    destination: destination,
-    duration: 8
-  });
-}, err => {
-  console.warn("GPS nicht verfügbar:", err);
-});
-
-
-
-
-
-
-
-
-  
-
-
-
-
-
-
-</script></body></html>
+</html>
