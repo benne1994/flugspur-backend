@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>3D Hybridkarte mit Gelände, GPS & Fluglinie</title>
+  <title>3D Hybridkarte mit Gelände, GPS und Skipisten</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
   <style>
     body { margin: 0; overflow: hidden; }
@@ -31,11 +31,10 @@
   });
 
   let scene, camera, renderer, lineGroup;
-  let standort = null;
-  let fahnchen = null;
+  let gpsMarker = null;
 
   map.on('load', () => {
-    // Gelände
+    // Gelände aktivieren
     map.addSource('terrain', {
       type: 'raster-dem',
       tiles: [`https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${maptilerApiKey}`],
@@ -44,13 +43,14 @@
     });
     map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
 
-    // Skipisten
+    // Skipistenlayer einfügen
     map.addSource('pisten', {
       type: 'raster',
       tiles: ['https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png'],
       tileSize: 256,
       attribution: '© OpenSnowMap'
     });
+
     map.addLayer({
       id: 'pisten-layer',
       type: 'raster',
@@ -59,32 +59,28 @@
       maxzoom: 17
     });
 
-    // Standort fixieren (einmalig)
-    navigator.geolocation.getCurrentPosition(pos => {
-      const lon = pos.coords.longitude;
-      const lat = pos.coords.latitude;
-      standort = [lon, lat];
+    // GPS-Standort regelmäßig aktualisieren
+    function updateGPS() {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lon = pos.coords.longitude;
+        const lat = pos.coords.latitude;
 
-      new maplibregl.Marker({ color: "#007aff" })
-        .setLngLat(standort)
-        .addTo(map);
+        if (!gpsMarker) {
+          gpsMarker = new maplibregl.Marker({ color: "#007aff" })
+            .setLngLat([lon, lat])
+            .addTo(map);
+        } else {
+          gpsMarker.setLngLat([lon, lat]);
+        }
+      }, err => {
+        console.warn("Standort nicht verfügbar:", err);
+      });
+    }
 
-      map.flyTo({ center: standort, zoom: 15 });
-    });
+    updateGPS();
+    setInterval(updateGPS, 5000); // alle 5 Sekunden
 
-    // Fähnchen bei Klick setzen
-    map.on('click', (e) => {
-      const coords = e.lngLat;
-      if (fahnchen) fahnchen.remove();
-
-      fahnchen = new maplibregl.Marker({ color: 'red' })
-        .setLngLat([coords.lng, coords.lat])
-        .addTo(map);
-
-      kameraVomStandortZumFahnchen();
-    });
-
-    // Three.js Szene
+    // Three.js Szene vorbereiten
     scene = new THREE.Scene();
     camera = new THREE.Camera();
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -141,34 +137,12 @@
         camera.projectionMatrix = m;
         renderer.resetState();
         renderer.render(scene, camera);
-        map.triggerRepaint(); // volle 3D-Performance
+        map.triggerRepaint();
       }
     };
 
     map.addLayer(threeLayer);
   });
-
-  function kameraVomStandortZumFahnchen() {
-    if (!standort || !fahnchen) return;
-    const ziel = fahnchen.getLngLat();
-    map.flyTo({
-      center: standort,
-      zoom: 16,
-      pitch: 70,
-      bearing: getBearing(standort, [ziel.lng, ziel.lat])
-    });
-  }
-
-  function getBearing(from, to) {
-    const lon1 = from[0] * Math.PI / 180;
-    const lat1 = from[1] * Math.PI / 180;
-    const lon2 = to[0] * Math.PI / 180;
-    const lat2 = to[1] * Math.PI / 180;
-    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) -
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-  }
 </script>
 
 </body>
