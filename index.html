@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>3D Hybridkarte mit Gelände, GPS und Skipisten</title>
+  <title>3D Hybrid Satellit + Gelände + große 3D Fluglinie</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
   <style>
     body { margin: 0; overflow: hidden; }
@@ -31,7 +31,6 @@
   });
 
   let scene, camera, renderer, lineGroup;
-  let gpsMarker = null;
 
   map.on('load', () => {
     // --- Gelände aktivieren ---
@@ -59,41 +58,23 @@
       maxzoom: 17
     });
 
-    // --- GPS optimiert per watchPosition ---
-    navigator.geolocation.watchPosition(pos => {
-      const lon = pos.coords.longitude;
-      const lat = pos.coords.latitude;
-
-      if (!gpsMarker) {
-        gpsMarker = new maplibregl.Marker({ color: "#007aff" })
-          .setLngLat([lon, lat])
-          .addTo(map);
-      } else {
-        gpsMarker.setLngLat([lon, lat]);
-      }
-    }, err => {
-      console.warn("Standortfehler:", err);
-    }, {
-      enableHighAccuracy: true,
-      maximumAge: 3000,
-      timeout: 7000
-    });
-
     // --- Three.js Szene vorbereiten ---
     scene = new THREE.Scene();
     camera = new THREE.Camera();
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.autoClear = false;
 
+    // Gruppe für Skalierung
     lineGroup = new THREE.Group();
     scene.add(lineGroup);
 
     const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
     const points = [];
 
+    // Mittelpunkt setzen
     const centerLon = 10.25;
     const centerLat = 50.125;
-    const R = 6371000;
+    const R = 6371000; // Erdradius in Metern
 
     function lonLatAltToVector3(lon, lat, alt) {
       const dLon = (lon - centerLon) * (Math.PI / 180);
@@ -121,8 +102,10 @@
     const line = new THREE.Line(geometry, material);
     lineGroup.add(line);
 
+    // Szene massiv skalieren
     lineGroup.scale.set(500, 500, 500);
 
+    // --- Three.js Layer sauber einbinden ---
     const threeLayer = {
       id: 'threejs-layer',
       type: 'custom',
