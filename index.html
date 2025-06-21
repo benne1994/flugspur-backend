@@ -1,75 +1,121 @@
-<!DOCTYPE html><html lang="de"><head>  <meta charset="utf-8">  <title>Flugspur App mit Höhen-Offset</title>
+<!DOCTYPE html><html lang="de"><head>  <meta charset="utf-8">
+  <title>Flugspur App mit Höhen-Offset</title>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const supabase = window.supabase.createClient(
-      'https://jmtajdfehlvyzrtfnszs.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptdGFqZGZlaGx2eXpydGZuc3pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2Mzc1NzAsImV4cCI6MjA2MjIxMzU3MH0.GjQ7A9NwIineYRtrpUmy01i1hwRukkwQEcBKuVqlOEI'
-    );
-  </script>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      font-family: var(--font);
-      background: var(--bg-color);
-      overflow: hidden;
-    }#cesiumContainer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
+<script>
+  const supabase = window.supabase.createClient(
+    'https://jmtajdfehlvyzrtfnszs.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptdGFqZGZlaGx2eXpydGZuc3pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2Mzc1NzAsImV4cCI6MjA2MjIxMzU3MH0.GjQ7A9NwIineYRtrpUmy01i1hwRukkwQEcBKuVqlOEI'
+  );
+</script>
 
-.cesium-button {
-  width: 8vw;
-  height: 8vw;
-  margin-bottom: 12px;
-}
+<style>
+    
 
-.cesium-viewer-toolbar {
-  top: 2vw !important;
-  right: 2vw !important;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    font-family: var(--font);
+    background: var(--bg-color);
+    overflow: hidden;
+  }
 
-#controls {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
-  background: rgba(255,255,255,0.8);
-  padding: 10px;
-  border-radius: 8px;
-}
+  #cesiumContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
 
-  </style>
+  .cesium-button {
+    width: 8vw;
+    height: 8vw;
+    margin-bottom: 12px;
+  }
+
+  .cesium-viewer-toolbar {
+    top: 2vw !important;
+    right: 2vw !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+
+
+</style>
+
 </head>
+
 <body>
   <div id="cesiumContainer"></div>
-  <div id="controls">
-    <button onclick="startTracking()">GPS folgen</button>
-    <button onclick="stopTracking()">GPS stoppen</button>
-    <button onclick="loadSkiLifts()">Seilbahnen laden</button>
-  </div>
+
+
 </body>
+
+
 <script>
-Cesium.Ion.defaultAccessToken  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZTI3MDRmMy1mYjg5LTRjNmYtYjBmZC1kZDQxN2NlNzVkZDEiLCJpZCI6Mjk3NzA1LCJpYXQiOjE3NDU5MzE5MTh9.svRycz7t606srY9WbWiWUaLB2hJpycWmo835Dy-VWtw';let startAltitude = null; const altitudeOffset = 50; const viewer = new Cesium.Viewer('cesiumContainer', { sceneMode: Cesium.SceneMode.SCENE3D, animation: false, timeline: false, baseLayerPicker: true, fullscreenButton: false, homeButton: false, sceneModePicker: false, geocoder: true, navigationHelpButton: false, infoBox: false, selectionIndicator: false, terrain: Cesium.Terrain.fromWorldTerrain() });
+Cesium.Ion.defaultAccessToken  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZTI3MDRmMy1mYjg5LTRjNmYtYjBmZC1kZDQxN2NlNzVkZDEiLCJpZCI6Mjk3NzA1LCJpYXQiOjE3NDU5MzE5MTh9.svRycz7t606srY9WbWiWUaLB2hJpycWmo835Dy-VWtw';
 
-// Skipistenlayer von OpenSnowMap einfügen viewer.imageryLayers.addImageryProvider( new Cesium.UrlTemplateImageryProvider({ url: 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png', credit: '© OpenSnowMap', maximumLevel: 17 }) );
+let startAltitude = null;
+const altitudeOffset = 50;
+const viewer = new Cesium.Viewer('cesiumContainer', {
+  sceneMode: Cesium.SceneMode.SCENE3D,
+  animation: false,
+  timeline: false,
+  baseLayerPicker: true,
+  fullscreenButton: false,
+  homeButton: false,
+  sceneModePicker: true,
+  geocoder: true,
+  navigationHelpButton: true,
+  infoBox: false,
+  selectionIndicator: false,
+  terrain: Cesium.Terrain.fromWorldTerrain()
+    
+});
 
-navigator.geolocation.getCurrentPosition(pos => { const lat = pos.coords.latitude; const lon = pos.coords.longitude; const alt = (pos.coords.altitude || 0) + 1000; const destination = Cesium.Cartesian3.fromDegrees(lon, lat, alt); viewer.camera.flyTo({ destination: destination, duration: 8 }); }, err => { console.warn("GPS nicht verfügbar:", err); });
+// Skipistenlayer von OpenSnowMap einfügen
+viewer.imageryLayers.addImageryProvider(
+  new Cesium.UrlTemplateImageryProvider({
+    url: 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png',
+    credit: '© OpenSnowMap',
+    maximumLevel: 17
+  })
+);
 
-let watchId = null; function startTracking() { if (watchId) return; watchId = navigator.geolocation.watchPosition(pos => { const lat = pos.coords.latitude; const lon = pos.coords.longitude; const alt = (pos.coords.altitude || 0) + 1000; const dest = Cesium.Cartesian3.fromDegrees(lon, lat, alt); viewer.camera.flyTo({ destination: dest, duration: 1 }); }); } function stopTracking() { if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; } }
+navigator.geolocation.getCurrentPosition(pos => {
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  const alt = (pos.coords.altitude || 0) + 1000;
 
-async function loadSkiLifts() { const url = "https://raw.githubusercontent.com/benne1994/flugspur-backend/main/seilbahnen.geojson"; const response = await fetch(url); if (!response.ok) { console.error("Fehler beim Laden der Seilbahnen"); return; } const geojson = await response.json(); const dataSource = await Cesium.GeoJsonDataSource.load(geojson, { clampToGround: true }); dataSource.entities.values.forEach(entity => { if (entity.polyline) { entity.polyline.material = Cesium.Color.PURPLE.withAlpha(0.9); entity.polyline.width = 5; } }); viewer.dataSources.add(dataSource); } </script>
+  const destination = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+  viewer.camera.flyTo({
+    destination: destination,
+    duration: 8
+  });
+}, err => {
+  console.warn("GPS nicht verfügbar:", err);
+});
 
-</html>
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+</script></body></html>
