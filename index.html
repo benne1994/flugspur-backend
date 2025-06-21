@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>3D Hybridkarte mit Gelände, GPS und Skipisten</title>
+  <title>3D Karte mit Gelände, GPS, Fähnchen & Fluglinie</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
   <style>
     body { margin: 0; overflow: hidden; }
@@ -31,6 +31,8 @@
   });
 
   let scene, camera, renderer, lineGroup;
+  let standort = null;
+  let fahnchen = null;
 
   map.on('load', () => {
     // --- Gelände aktivieren ---
@@ -42,7 +44,7 @@
     });
     map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
 
-    // --- Skipistenlayer einfügen ---
+    // --- Skipistenlayer ---
     map.addSource('pisten', {
       type: 'raster',
       tiles: ['https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png'],
@@ -58,18 +60,31 @@
       maxzoom: 17
     });
 
-    // --- Standort anzeigen ---
+    // --- Standort anzeigen (einmalig) ---
     navigator.geolocation.getCurrentPosition(pos => {
       const lon = pos.coords.longitude;
       const lat = pos.coords.latitude;
+      standort = [lon, lat];
 
       new maplibregl.Marker({ color: "#007aff" })
-        .setLngLat([lon, lat])
+        .setLngLat(standort)
         .addTo(map);
 
-      map.flyTo({ center: [lon, lat], zoom: 15 });
+      map.flyTo({ center: standort, zoom: 15, pitch: 60, bearing: 0 });
     }, err => {
       console.warn("Standort nicht verfügbar:", err);
+    });
+
+    // --- Fähnchen setzen bei Klick ---
+    map.on('click', (e) => {
+      const coords = e.lngLat;
+      if (fahnchen) fahnchen.remove();
+
+      fahnchen = new maplibregl.Marker({ color: 'red' })
+        .setLngLat([coords.lng, coords.lat])
+        .addTo(map);
+
+      kameraVomStandortZumFahnchen();
     });
 
     // --- Three.js Szene vorbereiten ---
@@ -113,7 +128,6 @@
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, material);
     lineGroup.add(line);
-
     lineGroup.scale.set(500, 500, 500);
 
     const threeLayer = {
@@ -136,6 +150,32 @@
 
     map.addLayer(threeLayer);
   });
+
+  // --- Kamera vom Standort zum Fähnchen ausrichten ---
+  function kameraVomStandortZumFahnchen() {
+    if (!standort || !fahnchen) return;
+    const ziel = fahnchen.getLngLat();
+    map.flyTo({
+      center: standort,
+      zoom: 16,
+      pitch: 70,
+      bearing: getBearing(standort, [ziel.lng, ziel.lat])
+    });
+  }
+
+  // --- Richtung berechnen ---
+  function getBearing(from, to) {
+    const lon1 = from[0] * Math.PI / 180;
+    const lat1 = from[1] * Math.PI / 180;
+    const lon2 = to[0] * Math.PI / 180;
+    const lat2 = to[1] * Math.PI / 180;
+
+    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) -
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+    const brng = Math.atan2(y, x);
+    return (brng * 180 / Math.PI + 360) % 360;
+  }
 </script>
 
 </body>
