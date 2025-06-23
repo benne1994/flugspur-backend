@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>3D Hybrid Satellit + Gelände + Skipisten</title>
+  <title>Skipisten & Standort auf Hybridkarte</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { margin: 0; overflow: hidden; }
@@ -22,36 +22,28 @@
 <script>
   const maptilerApiKey = 'r9nsDaWjLXRLFpq2ZVcC';
 
-  // Begrenze den Kartenbereich für weniger Datenlast!
-  const bounds = [
-    [9.5, 49.8], // Südwesten
-    [10.9, 50.4] // Nordosten
-  ];
-
-  // Map initialisieren
   const map = new maplibregl.Map({
     container: 'map',
     style: `https://api.maptiler.com/maps/hybrid/style.json?key=${maptilerApiKey}`,
     center: [10.25, 50.125],
-    zoom: 10,
-    pitch: 45,
+    zoom: 11,
+    pitch: 60,
     bearing: 0,
-    maxPitch: 60,
-    antialias: true,
-    maxBounds: bounds
+    maxPitch: 85,
+    antialias: true
   });
 
+  let clickedOnMarker = false;
+
   map.on('load', () => {
-    // --- Gelände aktivieren ---
     map.addSource('terrain', {
       type: 'raster-dem',
       tiles: [`https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${maptilerApiKey}`],
       tileSize: 512,
       maxzoom: 15
     });
-    map.setTerrain({ source: 'terrain', exaggeration: 1.1 });
+    map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
 
-    // --- Skipisten-Overlay ---
     map.addSource('pisten', {
       type: 'raster',
       tiles: ['https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png'],
@@ -67,9 +59,8 @@
     });
   });
 
-  // Standort-Button & Marker
   const btn = document.getElementById('loc-btn');
-  let marker;
+  let userMarker;
   btn.onclick = function() {
     if (!navigator.geolocation) {
       alert("Geolokalisierung wird nicht unterstützt.");
@@ -79,16 +70,65 @@
     navigator.geolocation.getCurrentPosition(pos => {
       const { longitude, latitude } = pos.coords;
       map.flyTo({ center: [longitude, latitude], zoom: 14, speed: 1.2 });
-      if (marker) marker.setLngLat([longitude, latitude]);
-      else marker = new maplibregl.Marker({ color: '#1976d2' })
+      if (userMarker) userMarker.setLngLat([longitude, latitude]);
+      else userMarker = new maplibregl.Marker({ color: '#1976d2' })
         .setLngLat([longitude, latitude])
         .addTo(map);
       btn.textContent = "📍 Standort zeigen";
-    }, err => {
+    }, () => {
       btn.textContent = "📍 Standort zeigen";
       alert("Standort nicht verfügbar.");
     });
   };
+
+  map.on('click', async (e) => {
+    if (clickedOnMarker) {
+      clickedOnMarker = false;
+      return;
+    }
+
+    const { lng, lat } = e.lngLat;
+    const zoom = map.getZoom();
+    const tileSize = 256;
+    const z = Math.min(15, Math.floor(zoom));
+    const xtile = Math.floor((lng + 180) / 360 * Math.pow(2, z));
+    const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
+
+    const url = `https://api.maptiler.com/tiles/terrain-rgb/${z}/${xtile}/${ytile}.png?key=${maptilerApiKey}`;
+
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = url;
+      await img.decode();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = tileSize;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      const px = Math.floor(((lng + 180) / 360 * Math.pow(2, z) - xtile) * tileSize);
+      const py = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z) - ytile) * tileSize);
+      const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+      const elevation = -10000 + ((r * 256 * 256 + g * 256 + b) * 0.1);
+
+      const marker = new maplibregl.Marker({ color: '#d32f2f' })
+        .setLngLat([lng, lat])
+        .setPopup(new maplibregl.Popup().setText(`Höhe: ${elevation.toFixed(1)} m`))
+        .addTo(map);
+
+      marker.togglePopup();
+
+      marker.getElement().addEventListener('click', (event) => {
+        event.stopPropagation();
+        clickedOnMarker = true;
+        marker.remove();
+      });
+
+    } catch (err) {
+      console.error('Fehler beim Abrufen der Höhenmeter:', err);
+    }
+  });
 </script>
 </body>
 </html>
